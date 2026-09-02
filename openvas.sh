@@ -12,13 +12,14 @@
 #   sudo ./gvm-openvas-setup.sh check       # run gvm-check-setup only
 #   sudo ./gvm-openvas-setup.sh start       # start services
 #   sudo ./gvm-openvas-setup.sh status      # show service status
-#   sudo ./gvm-openvas-setup.sh reset-pass  # reset admin password
+#   sudo ./gvm-openvas-setup.sh reset-pass  # reset admin password to 'admin'
 #   sudo ./gvm-openvas-setup.sh theme       # (re)apply the black GSA theme only
 #
 set -euo pipefail
 
 LOG_FILE="/var/log/gvm-openvas-setup.log"
 ADMIN_USER="admin"
+ADMIN_PASSWORD="admin"                     # <-- fixed password
 GSA_WEB_DIRS=(
     "/usr/share/gvm/gsad/web"
     "/usr/share/gsad/web"
@@ -57,6 +58,10 @@ install_gvm() {
     log "CERT-Bund, CVE, and SCAP data. This step can take 30-90+ minutes depending"
     log "on network speed. Do not interrupt it."
     gvm-setup 2>&1 | tee -a "$LOG_FILE"
+
+    # Force the admin password to 'admin' after setup
+    log "Setting admin password to '$ADMIN_PASSWORD'..."
+    gvmd --user="$ADMIN_USER" --new-password="$ADMIN_PASSWORD" 2>&1 | tee -a "$LOG_FILE"
 }
 
 run_check() {
@@ -91,10 +96,9 @@ show_status() {
 }
 
 reset_password() {
-    log "Resetting password for GVM admin user '$ADMIN_USER'..."
-    NEW_PASS=$(gvmd --user="$ADMIN_USER" --new-password="$(openssl rand -base64 12)")
-    log "Password reset. Check gvmd output above; if it printed the password, save it now."
-    log "Alternatively run manually: gvmd --user=$ADMIN_USER --new-password='YourNewPassword'"
+    log "Resetting password for GVM admin user '$ADMIN_USER' to '$ADMIN_PASSWORD'..."
+    gvmd --user="$ADMIN_USER" --new-password="$ADMIN_PASSWORD" 2>&1 | tee -a "$LOG_FILE"
+    log "Password reset to '$ADMIN_PASSWORD'."
 }
 
 find_gsa_web_dir() {
@@ -237,16 +241,15 @@ CSSEOF
 }
 
 print_summary() {
-    cat <<'EOF'
+    cat <<EOF
 
 =====================================================================
 GVM / OpenVAS Setup Summary
 =====================================================================
 - Web UI (Greenbone Security Assistant): https://127.0.0.1:9392
-- Default admin username is usually printed at the end of gvm-setup
-  (look for "User created with password" in the terminal output/log)
-- If you missed the generated password, reset it with:
-    sudo gvmd --user=admin --new-password='YourNewPassword'
+- Admin credentials: $ADMIN_USER / $ADMIN_PASSWORD
+- If you ever need to reset the password, run:
+    sudo $0 reset-pass
 - Feed updates (run periodically, e.g. via cron):
     sudo greenbone-nvt-sync
     sudo greenbone-feed-sync --type GVMD_DATA
@@ -255,7 +258,7 @@ GVM / OpenVAS Setup Summary
 - Logs for this script: /var/log/gvm-openvas-setup.log
 - Full GVM logs: /var/log/gvm/
 - Black theme applied to GSA web UI (hard-refresh browser: Ctrl+Shift+R)
-  Re-apply anytime with: sudo ./gvm-openvas-setup.sh theme
+  Re-apply anytime with: sudo $0 theme
   Original index.html backed up alongside it as index.html.orig
 =====================================================================
 EOF
